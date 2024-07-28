@@ -101,3 +101,8 @@ client.on('interactionCreate', async interaction => {
 });
 
 client.login(process.env.TOKEN);
+
+const guildMemberAddHandler = require('./events/guildMemberAdd');
+client.on('guildMemberAdd', guildMemberAddHandler);
+
+module.exports = client;
