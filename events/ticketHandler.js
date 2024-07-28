@@ -142,4 +142,87 @@ async function handleSelectMenu(interaction, client) {
             return interaction.followUp({ content: 'You already have an open ticket.', ephemeral: true });
         }
 
-        const ticketCha
+        const ticketChannel = await guild.channels.create({
+            name: `${user.username}-${ticketType}-ticket`,
+            type: ChannelType.GuildText,
+            permissionOverwrites: [
+                {
+                    id: guild.roles.everyone,
+                    deny: [PermissionsBitField.Flags.ViewChannel],
+                },
+                {
+                    id: userId,
+                    allow: [PermissionsBitField.Flags.ViewChannel],
+                },
+                ...settings.supportRoleIds.map(roleId => ({
+                    id: roleId,
+                    allow: [PermissionsBitField.Flags.ViewChannel],
+                }))
+            ],
+        });
+
+        const embed = new EmbedBuilder()
+            .setAuthor({
+                name: 'Ticket Created',
+                iconURL: ticketIcons.mainIcon
+            })
+            .setDescription(`Ticket type: **${ticketType}**\n\nPlease describe your issue in detail to receive the best support.`)
+            .setFooter({ text: 'Support Team', iconURL: ticketIcons.modIcon })
+            .setColor('#00FF00')
+            .setTimestamp();
+
+        const closeButton = new ButtonBuilder()
+            .setCustomId(`close_ticket_${userId}`)
+            .setLabel('Close Ticket')
+            .setStyle(ButtonStyle.Danger);
+
+        const closeRow = new ActionRowBuilder().addComponents(closeButton);
+
+        await ticketChannel.send({
+            content: `Hello ${user}, thank you for reaching out to our support team. Our team will assist you shortly.`,
+            embeds: [embed],
+            components: [closeRow]
+        });
+
+        db.run('INSERT INTO tickets (guildId, userId, channelId, ticketType, status) VALUES (?, ?, ?, ?, ?)', [guildId, userId, ticketChannel.id, ticketType, 'open'], (err) => {
+            if (err) {
+                console.error(err);
+                return interaction.followUp({ content: 'An error occurred while saving your ticket.', ephemeral: true });
+            }
+            interaction.followUp({ content: 'Your ticket has been created successfully.', ephemeral: true });
+        });
+    });
+}
+
+async function handleCloseButton(interaction, client) {
+    await interaction.deferReply({ ephemeral: true });
+
+    const { guild, user, customId, channel } = interaction;
+    if (!guild || !user || !channel) return;
+
+    const ticketOwnerId = customId.split('_')[2];
+    if (user.id !== ticketOwnerId) {
+        return interaction.followUp({ content: 'Only the ticket owner can close the ticket.', ephemeral: true });
+    }
+
+    db.get('SELECT * FROM tickets WHERE guildId = ? AND channelId = ?', [guild.id, channel.id], async (err, row) => {
+        if (err) {
+            console.error(err);
+            return interaction.followUp({ content: 'An error occurred while closing your ticket.', ephemeral: true });
+        }
+
+        if (!row) {
+            return interaction.followUp({ content: 'No ticket found for this channel.', ephemeral: true });
+        }
+
+        await channel.delete();
+
+        db.run('DELETE FROM tickets WHERE guildId = ? AND channelId = ?', [guild.id, channel.id], (err) => {
+            if (err) {
+                console.error(err);
+                return interaction.followUp({ content: 'An error occurred while removing the ticket from the database.', ephemeral: true });
+            }
+            interaction.followUp({ content: 'Your ticket has been closed and the channel has been deleted.', ephemeral: true });
+        });
+    });
+}
