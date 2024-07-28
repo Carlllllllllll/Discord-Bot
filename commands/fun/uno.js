@@ -1,132 +1,80 @@
-const { SlashCommandBuilder } = require('@discordjs/builders');
-const { ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionsBitField, ChannelType } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const path = require('path');
+const fs = require('fs');
 const mongoose = require('mongoose');
-const config = require('../../config.json');
+const { Client, GatewayIntentBits, Collection } = require('discord.js');
 
-// MongoDB setup
-mongoose.connect(config.mongoURI, { useNewUrlParser: true, useUnifiedTopology: true });
+require('dotenv').config();
 
-const unoGameSchema = new mongoose.Schema({
-    channelId: String,
-    players: Array,
-    currentPlayerIndex: Number,
-    ready: Boolean,
-    starterId: String,
+mongoose.connect(process.env.MONGO_URI, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+}).then(() => {
+    console.log('Connected to MongoDB');
+}).catch((err) => {
+    console.error('Failed to connect to MongoDB', err);
 });
 
-const UnoGameModel = mongoose.model('UnoGame', unoGameSchema);
-
-// UnoGame class
 class UnoGame {
-    constructor(channelId, starterId) {
-        this.channelId = channelId;
-        this.starterId = starterId;
-        this.players = [];
-        this.currentPlayerIndex = 0;
-        this.ready = false;
+    constructor(channel, players = [], currentPlayerIndex = 0, deck = [], discardPile = [], gameStarted = false) {
+        this.channel = channel;
+        this.players = players;
+        this.currentPlayerIndex = currentPlayerIndex;
+        this.deck = deck;
+        this.discardPile = discardPile;
+        this.gameStarted = gameStarted;
     }
 
-    addPlayer(user) {
-        this.players.push(user);
+    startGame() {
+        this.gameStarted = true;
+        this.shuffleDeck();
+        this.dealCards();
     }
 
-    hasPlayer(userId) {
-        return this.players.some(player => player.id === userId);
+    shuffleDeck() {
+        // Implement card shuffling logic here
     }
 
-    setReady(ready) {
-        this.ready = ready;
+    dealCards() {
+        // Implement card dealing logic here
     }
 
-    isReady() {
-        return this.ready;
-    }
-
-    isPlayerTurn(userId) {
-        return this.players[this.currentPlayerIndex].id === userId;
-    }
-
-    playCard(userId, card) {
-        // Dummy logic for card playing
-        return { success: true, message: 'Card played successfully', gameOver: false };
-    }
-
-    nextTurn() {
+    nextPlayer() {
         this.currentPlayerIndex = (this.currentPlayerIndex + 1) % this.players.length;
-    }
-
-    start() {
-        this.currentPlayerIndex = 0;
-    }
-
-    get currentPlayer() {
         return this.players[this.currentPlayerIndex];
     }
 
-    async save() {
-        await UnoGameModel.findOneAndUpdate(
-            { channelId: this.channelId },
-            {
-                channelId: this.channelId,
-                players: this.players,
-                currentPlayerIndex: this.currentPlayerIndex,
-                ready: this.ready,
-                starterId: this.starterId,
-            },
-            { upsert: true }
-        );
-    }
-
-    static async load(channelId) {
-        const gameData = await UnoGameModel.findOne({ channelId });
-        if (!gameData) return null;
-
-        const game = new UnoGame(channelId, gameData.starterId);
-        game.players = gameData.players;
-        game.currentPlayerIndex = gameData.currentPlayerIndex;
-        game.ready = gameData.ready;
-        return game;
-    }
-
-    static async delete(channelId) {
-        await UnoGameModel.findOneAndDelete({ channelId });
+    playCard(player, card) {
+        // Implement card playing logic here
     }
 }
 
-// gameManager
-const gameManager = {
-    games: new Map(),
+class GameManager {
+    constructor() {
+        this.games = new Map();
+    }
 
-    async addGame(channelId, game) {
-        this.games.set(channelId, game);
-        await game.save();
-    },
-
-    async getGame(channelId) {
-        if (this.games.has(channelId)) {
-            return this.games.get(channelId);
-        }
-        const game = await UnoGame.load(channelId);
-        if (game) {
-            this.games.set(channelId, game);
-        }
+    createGame(channel) {
+        const game = new UnoGame(channel);
+        this.games.set(channel.id, game);
         return game;
-    },
+    }
 
-    async removeGame(channelId) {
-        this.games.delete(channelId);
-        await UnoGame.delete(channelId);
-    },
+    getGame(channel) {
+        return this.games.get(channel.id);
+    }
 
-    hasGame(channelId) {
-        return this.games.has(channelId);
-    },
-};
+    deleteGame(channel) {
+        this.games.delete(channel.id);
+    }
+}
+
+const gameManager = new GameManager();
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('uno')
-        .setDescription('Play UNO with friends!')
+        .setDescription('Play UNO!')
         .addSubcommand(subcommand =>
             subcommand
                 .setName('start')
@@ -137,12 +85,8 @@ module.exports = {
                 .setDescription('Join an existing UNO game'))
         .addSubcommand(subcommand =>
             subcommand
-                .setName('ready')
-                .setDescription('Ready to start the UNO game'))
-        .addSubcommand(subcommand =>
-            subcommand
                 .setName('playcard')
-                .setDescription('Play a card in the UNO game')
+                .setDescription('Play a card in your hand')
                 .addStringOption(option =>
                     option.setName('card')
                         .setDescription('The card to play')
@@ -154,96 +98,43 @@ module.exports = {
 
     async execute(interaction) {
         const subcommand = interaction.options.getSubcommand();
-        const channelId = interaction.channel.id;
-        let game;
 
-        switch (subcommand) {
-            case 'start':
-                if (await gameManager.hasGame(channelId)) {
-                    return interaction.reply({ content: 'A game is already in progress in this channel.', ephemeral: true });
-                }
-
-                game = new UnoGame(channelId, interaction.user.id);
-                game.addPlayer(interaction.user);
-                await gameManager.addGame(channelId, game);
-
-                return interaction.reply({ content: 'UNO game started! Use `/uno join` to join the game.', ephemeral: true });
-
-            case 'join':
-                game = await gameManager.getGame(channelId);
-                if (!game) {
-                    return interaction.reply({ content: 'No game in progress in this channel.', ephemeral: true });
-                }
-
-                if (game.hasPlayer(interaction.user.id)) {
-                    return interaction.reply({ content: 'You are already in the game.', ephemeral: true });
-                }
-
-                game.addPlayer(interaction.user);
-                await game.save();
-                return interaction.reply({ content: `${interaction.user.username} joined the UNO game!`, ephemeral: true });
-
-            case 'ready':
-                game = await gameManager.getGame(channelId);
-                if (!game) {
-                    return interaction.reply({ content: 'No game in progress in this channel.', ephemeral: true });
-                }
-
-                if (!game.hasPlayer(interaction.user.id)) {
-                    return interaction.reply({ content: 'You are not in the game.', ephemeral: true });
-                }
-
-                game.setReady(true);
-                game.start();
-                await game.save();
-                return interaction.reply({ content: 'The game has started!', ephemeral: true });
-
-            case 'playcard':
-                game = await gameManager.getGame(channelId);
-                if (!game) {
-                    return interaction.reply({ content: 'No game in progress in this channel.', ephemeral: true });
-                }
-
-                if (!game.isReady()) {
-                    return interaction.reply({ content: 'The game has not started yet.', ephemeral: true });
-                }
-
-                const card = interaction.options.getString('card');
-                const userId = interaction.user.id;
-
-                if (!game.isPlayerTurn(userId)) {
-                    return interaction.reply({ content: 'It is not your turn.', ephemeral: true });
-                }
-
-                const result = game.playCard(userId, card);
-                if (!result.success) {
-                    return interaction.reply({ content: result.message, ephemeral: true });
-                }
-
-                if (result.gameOver) {
-                    await gameManager.removeGame(channelId);
-                    return interaction.reply({ content: `Game over! ${interaction.user.username} wins!`, ephemeral: true });
-                }
-
-                game.nextTurn();
-                await game.save();
-                return interaction.reply({ content: result.message, ephemeral: true });
-
-            case 'endgame':
-                game = await gameManager.getGame(channelId);
-                if (!game) {
-                    return interaction.reply({ content: 'No game in progress in this channel.', ephemeral: true });
-                }
-
-                if (game.starterId !== interaction.user.id) {
-                    return interaction.reply({ content: 'Only the user who started the game can end it.', ephemeral: true });
-                }
-
-                await gameManager.removeGame(channelId);
-                return interaction.reply({ content: 'The UNO game has been ended.', ephemeral: true });
-
-            default:
-                return interaction.reply({ content: 'Invalid command.', ephemeral: true });
+        if (subcommand === 'start') {
+            let game = gameManager.getGame(interaction.channel);
+            if (game) {
+                return interaction.reply('A game is already in progress in this channel.');
+            }
+            game = gameManager.createGame(interaction.channel);
+            game.startGame();
+            return interaction.reply('Started a new UNO game! Use /uno join to join the game.');
+        } else if (subcommand === 'join') {
+            const game = gameManager.getGame(interaction.channel);
+            if (!game) {
+                return interaction.reply('There is no game in progress in this channel.');
+            }
+            if (game.players.includes(interaction.user)) {
+                return interaction.reply('You are already in the game.');
+            }
+            game.players.push(interaction.user);
+            return interaction.reply(`${interaction.user.username} joined the game!`);
+        } else if (subcommand === 'playcard') {
+            const game = gameManager.getGame(interaction.channel);
+            if (!game) {
+                return interaction.reply('There is no game in progress in this channel.');
+            }
+            const card = interaction.options.getString('card');
+            // Implement card playing logic
+            return interaction.reply(`${interaction.user.username} played ${card}!`);
+        } else if (subcommand === 'endgame') {
+            const game = gameManager.getGame(interaction.channel);
+            if (!game) {
+                return interaction.reply('There is no game in progress in this channel.');
+            }
+            if (interaction.user.id !== game.players[0].id) {
+                return interaction.reply('Only the user who started the game can end it.');
+            }
+            gameManager.deleteGame(interaction.channel);
+            return interaction.reply('The UNO game has been ended.');
         }
-    },
+    }
 };
