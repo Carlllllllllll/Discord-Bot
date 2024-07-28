@@ -12,8 +12,8 @@ const { EmbedBuilder } = require('@discordjs/builders');
 const { printWatermark } = require('./events/handler');
 const config = require('./config.json');  // Include config.json
 
-// Connect to MongoDB
-mongoose.connect(config.mongodbUri, {
+// MongoDB Connection
+mongoose.connect(process.env.MONGODB_URI || config.mongodbUri, {
     useNewUrlParser: true,
     useUnifiedTopology: true,
 }).then(() => {
@@ -22,15 +22,13 @@ mongoose.connect(config.mongodbUri, {
     console.error('Failed to connect to MongoDB', err);
 });
 
-// Initialize client
+// Discord Client Initialization
 const client = new Client({
     intents: Object.keys(GatewayIntentBits).map(key => GatewayIntentBits[key]),
 });
 
-// Initialize collections for commands
 client.commands = new Collection();
 
-// Load commands
 const commandsPath = path.join(__dirname, 'commands');
 const commandFolders = fs.readdirSync(commandsPath);
 
@@ -68,14 +66,14 @@ for (const folder of commandFolders) {
 console.log('\x1b[35m%s\x1b[0m', `│ Total number of commands: ${totalCommands}`);
 console.log('\x1b[33m%s\x1b[0m', '└───────────────────────────────────────────┘');
 
-const rest = new REST({ version: '10' }).setToken(config.token);
+const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN || config.token);
 
 (async () => {
     try {
         console.log('Started refreshing application (/) commands.');
 
         await rest.put(
-            Routes.applicationCommands(config.CLIENT_ID),
+            Routes.applicationCommands(process.env.CLIENT_ID || config.CLIENT_ID),
             { body: commands }
         );
 
@@ -90,11 +88,14 @@ client.once('ready', async () => {
     await client.user.setActivity(`Serving ${client.guilds.cache.size} servers`);
 });
 
-// Load event handlers
 const eventFiles = fs.readdirSync('./events').filter(file => file.endsWith('.js'));
 for (const file of eventFiles) {
     const event = require(`./events/${file}`);
-    event(client);
+    if (typeof event === 'function') {
+        event(client);
+    } else {
+        console.error(`Event file ${file} does not export a valid function.`);
+    }
 }
 
 client.on('interactionCreate', async interaction => {
@@ -112,4 +113,4 @@ client.on('interactionCreate', async interaction => {
     }
 });
 
-client.login(config.token);
+client.login(process.env.TOKEN || config.token);
