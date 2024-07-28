@@ -10,8 +10,9 @@ const { SpotifyPlugin } = require('@distube/spotify');
 const { SoundCloudPlugin } = require('@distube/soundcloud');
 const { EmbedBuilder } = require('@discordjs/builders');
 const { printWatermark } = require('./events/handler');
+const config = require('./config.json');  // Include config.json
 
-mongoose.connect(process.env.MONGO_URI, {
+mongoose.connect(config.mongodbUri, {
     useNewUrlParser: true,
     useUnifiedTopology: true,
 }).then(() => {
@@ -63,19 +64,14 @@ for (const folder of commandFolders) {
 console.log('\x1b[35m%s\x1b[0m', `│ Total number of commands: ${totalCommands}`);
 console.log('\x1b[33m%s\x1b[0m', '└───────────────────────────────────────────┘');
 
-const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
-
-if (!process.env.TOKEN) {
-    console.error('Discord token is not set in environment variables');
-    process.exit(1);
-}
+const rest = new REST({ version: '10' }).setToken(config.token);
 
 (async () => {
     try {
         console.log('Started refreshing application (/) commands.');
 
         await rest.put(
-            Routes.applicationCommands(process.env.CLIENT_ID),
+            Routes.applicationCommands(config.CLIENT_ID),
             { body: commands }
         );
 
@@ -105,9 +101,4 @@ client.on('interactionCreate', async interaction => {
     }
 });
 
-client.login(process.env.TOKEN);
-
-const guildMemberAddHandler = require('./events/guildMemberAdd');
-client.on('guildMemberAdd', guildMemberAddHandler);
-
-module.exports = client;
+client.login(config.token);
