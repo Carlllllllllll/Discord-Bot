@@ -10,10 +10,9 @@ const { SpotifyPlugin } = require('@distube/spotify');
 const { SoundCloudPlugin } = require('@distube/soundcloud');
 const { EmbedBuilder } = require('@discordjs/builders');
 const { printWatermark } = require('./events/handler');
-const config = require('./config.json');  // Include config.json
+const config = require('./config.json'); // Include config.json
 
-// MongoDB Connection
-mongoose.connect(process.env.MONGODB_URI || config.mongodbUri, {
+mongoose.connect(process.env.MONGODB_URI, {
     useNewUrlParser: true,
     useUnifiedTopology: true,
 }).then(() => {
@@ -22,7 +21,6 @@ mongoose.connect(process.env.MONGODB_URI || config.mongodbUri, {
     console.error('Failed to connect to MongoDB', err);
 });
 
-// Discord Client Initialization
 const client = new Client({
     intents: Object.keys(GatewayIntentBits).map(key => GatewayIntentBits[key]),
 });
@@ -66,14 +64,14 @@ for (const folder of commandFolders) {
 console.log('\x1b[35m%s\x1b[0m', `│ Total number of commands: ${totalCommands}`);
 console.log('\x1b[33m%s\x1b[0m', '└───────────────────────────────────────────┘');
 
-const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN || config.token);
+const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 
 (async () => {
     try {
         console.log('Started refreshing application (/) commands.');
 
         await rest.put(
-            Routes.applicationCommands(process.env.CLIENT_ID || config.CLIENT_ID),
+            Routes.applicationCommands(process.env.CLIENT_ID),
             { body: commands }
         );
 
@@ -82,11 +80,6 @@ const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN || c
         console.error(error);
     }
 })();
-
-client.once('ready', async () => {
-    console.log(`Ready! Logged in as ${client.user.tag}`);
-    await client.user.setActivity(`Serving ${client.guilds.cache.size} servers`);
-});
 
 const eventFiles = fs.readdirSync('./events').filter(file => file.endsWith('.js'));
 for (const file of eventFiles) {
@@ -98,19 +91,4 @@ for (const file of eventFiles) {
     }
 }
 
-client.on('interactionCreate', async interaction => {
-    if (!interaction.isCommand()) return;
-
-    const command = client.commands.get(interaction.commandName);
-
-    if (!command) return;
-
-    try {
-        await command.execute(interaction);
-    } catch (error) {
-        console.error(error);
-        await interaction.reply({ content: 'There was an error while executing this command!', ephemeral: true });
-    }
-});
-
-client.login(process.env.TOKEN || config.token);
+client.login(process.env.TOKEN);
