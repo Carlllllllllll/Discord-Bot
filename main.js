@@ -63,7 +63,12 @@ for (const folder of commandFolders) {
 console.log('\x1b[35m%s\x1b[0m', `│ Total number of commands: ${totalCommands}`);
 console.log('\x1b[33m%s\x1b[0m', '└───────────────────────────────────────────┘');
 
-const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
+const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
+
+if (!process.env.TOKEN) {
+    console.error('Discord token is not set in environment variables');
+    process.exit(1);
+}
 
 (async () => {
     try {
