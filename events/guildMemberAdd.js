@@ -40,8 +40,9 @@ function getRandomImage(images) {
     return images[Math.floor(Math.random() * images.length)];
 }
 
-module.exports = (client) => {
-    client.on('guildMemberAdd', async (member) => {
+module.exports = {
+    name: 'guildMemberAdd',
+    async execute(member, client) {
         console.log(`New member added: ${member.user.tag} in guild: ${member.guild.name}`);
 
         const guildId = member.guild.id;
@@ -96,5 +97,5 @@ module.exports = (client) => {
         } else {
             console.log(`Welcome messages are disabled for guild: ${member.guild.name}`);
         }
-    });
+    },
 };
