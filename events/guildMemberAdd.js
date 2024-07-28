@@ -42,7 +42,7 @@ function getRandomImage(images) {
 
 module.exports = {
     name: 'guildMemberAdd',
-    async execute(member, client) {
+    async execute(member) {
         console.log(`New member added: ${member.user.tag} in guild: ${member.guild.name}`);
 
         const guildId = member.guild.id;
