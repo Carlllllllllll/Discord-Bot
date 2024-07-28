@@ -10,7 +10,7 @@ const { SpotifyPlugin } = require('@distube/spotify');
 const { SoundCloudPlugin } = require('@distube/soundcloud');
 const { EmbedBuilder } = require('@discordjs/builders');
 const { printWatermark } = require('./events/handler');
-const config = require('./config.json'); // Include config.json
+const config = require('./config.json');
 
 mongoose.connect(process.env.MONGODB_URI, {
     useNewUrlParser: true,
