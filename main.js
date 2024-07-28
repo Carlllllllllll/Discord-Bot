@@ -12,6 +12,7 @@ const { EmbedBuilder } = require('@discordjs/builders');
 const { printWatermark } = require('./events/handler');
 const config = require('./config.json');  // Include config.json
 
+// Connect to MongoDB
 mongoose.connect(config.mongodbUri, {
     useNewUrlParser: true,
     useUnifiedTopology: true,
@@ -21,12 +22,15 @@ mongoose.connect(config.mongodbUri, {
     console.error('Failed to connect to MongoDB', err);
 });
 
+// Initialize client
 const client = new Client({
     intents: Object.keys(GatewayIntentBits).map(key => GatewayIntentBits[key]),
 });
 
+// Initialize collections for commands
 client.commands = new Collection();
 
+// Load commands
 const commandsPath = path.join(__dirname, 'commands');
 const commandFolders = fs.readdirSync(commandsPath);
 
@@ -85,6 +89,13 @@ client.once('ready', async () => {
     console.log(`Ready! Logged in as ${client.user.tag}`);
     await client.user.setActivity(`Serving ${client.guilds.cache.size} servers`);
 });
+
+// Load event handlers
+const eventFiles = fs.readdirSync('./events').filter(file => file.endsWith('.js'));
+for (const file of eventFiles) {
+    const event = require(`./events/${file}`);
+    event(client);
+}
 
 client.on('interactionCreate', async interaction => {
     if (!interaction.isCommand()) return;
