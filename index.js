@@ -1,45 +1,61 @@
 const connectDB = require('./database'); // Import the MongoDB connection function
-const client = require('./main'); // Import the client from main.js
-require('./bot'); // Import bot initialization (if needed)
+const { Client, GatewayIntentBits, Collection } = require('discord.js');
+require('dotenv').config(); // Load environment variables from .env file
 
-// Connect to MongoDB
-connectDB(); // Connect to MongoDB before loading event handlers
+// Create a new client instance
+const client = new Client({
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent,
+        GatewayIntentBits.GuildMembers,
+        GatewayIntentBits.GuildMessageReactions,
+    ],
+});
+
+client.commands = new Collection(); // Initialize commands collection
+
+// Import and initialize bot commands (if needed)
+require('./bot')(client);
 
 // Function to load event handlers
 const loadEventHandlers = () => {
-    console.log('\x1b[36m[ WELCOME ]\x1b[0m', '\x1b[32mWelcome System Active ✅\x1b[0m');
-    const guildMemberAddHandler = require('./events/guildMemberAdd');
-    guildMemberAddHandler(client); // Pass client to event handler
+    const eventFiles = [
+        { name: 'guildMemberAdd', file: './events/guildMemberAdd' },
+        { name: 'ticketHandler', file: './events/ticketHandler' },
+        { name: 'voiceChannelHandler', file: './events/voiceChannelHandler' },
+        { name: 'giveawayHandler', file: './events/giveaway' },
+        { name: 'autoroleHandler', file: './events/autorole' },
+        { name: 'reactionRoleHandler', file: './events/reactionroles' },
+        { name: 'nqnHandler', file: './events/nqn' },
+        { name: 'emojiHandler', file: './events/emojiHandler' },
+        { name: 'music', file: './events/music' },
+    ];
 
-    console.log('\x1b[36m[ TICKET ]\x1b[0m', '\x1b[32mTicket System Active ✅\x1b[0m');
-    const ticketHandler = require('./events/ticketHandler');
-    ticketHandler(client);
-
-    console.log('\x1b[36m[ VOICE CHANNEL ]\x1b[0m', '\x1b[32mVoice Channel System Active ✅\x1b[0m');
-    const voiceChannelHandler = require('./events/voiceChannelHandler');
-    voiceChannelHandler(client);
-
-    console.log('\x1b[36m[ GIVEAWAY ]\x1b[0m', '\x1b[32mGiveaway System Active ✅\x1b[0m');
-    const giveawayHandler = require('./events/giveaway');
-    giveawayHandler(client);
-
-    console.log('\x1b[36m[ AUTOROLE ]\x1b[0m', '\x1b[32mAutorole System Active ✅\x1b[0m');
-    const autoroleHandler = require('./events/autorole');
-    autoroleHandler(client);
-
-    console.log('\x1b[36m[ REACTION ROLES ]\x1b[0m', '\x1b[32mReaction Roles System Active ✅\x1b[0m');
-    const reactionRoleHandler = require('./events/reactionroles');
-    reactionRoleHandler(client);
-
-    console.log('\x1b[36m[ NQN Module ]\x1b[0m', '\x1b[32mEmoji System Active ✅\x1b[0m');
-    const nqnHandler = require('./events/nqn');
-    nqnHandler(client);
-
-    const emojiHandler = require('./events/emojiHandler');
-    emojiHandler(client);
-
-    require('./events/music')(client);
+    eventFiles.forEach(({ name, file }) => {
+        const handler = require(file);
+        if (typeof handler === 'function') {
+            handler(client);
+            console.log(`\x1b[36m[ ${name.toUpperCase()} ]\x1b[0m`, '\x1b[32mSystem Active ✅\x1b[0m');
+        } else {
+            console.error(`\x1b[31m[ ERROR ]\x1b[0m ${name} handler is not a function.`);
+        }
+    });
 };
 
-// Load event handlers after connecting to MongoDB
-loadEventHandlers();
+// Connect to MongoDB and load event handlers after successful connection
+connectDB()
+    .then(() => {
+        console.log('Connected to MongoDB');
+        loadEventHandlers();
+    })
+    .catch((err) => {
+        console.error('Failed to connect to MongoDB', err);
+    });
+
+// Login to Discord with your app's token
+client.login(process.env.TOKEN).then(() => {
+    console.log('Bot is logged in and ready to operate');
+}).catch((err) => {
+    console.error('Failed to login to Discord', err);
+});
